@@ -23,6 +23,8 @@
     
     if([[[NSUserDefaults standardUserDefaults] objectForKey:@"Help"] intValue] <= 0)
         [self showHelp];
+    else
+        [self enableLocationServices];
 
     // Do any additional setup after loading the view, typically from a nib.
 }
@@ -42,7 +44,7 @@
     }
 
     _locationManager.distanceFilter = kCLDistanceFilterNone; // whenever we move
-    _locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters;
+    _locationManager.desiredAccuracy = kCLLocationAccuracyBest;
 
     NSUInteger code = [CLLocationManager authorizationStatus];
     if (code == kCLAuthorizationStatusNotDetermined && [_locationManager respondsToSelector:@selector(requestWhenInUseAuthorization)])
@@ -57,6 +59,30 @@
     [_locationManager startUpdatingLocation];
 }
 
+- (void)locationManager:(CLLocationManager *)manager
+    didUpdateToLocation:(CLLocation *)newLocation
+           fromLocation:(CLLocation *)oldLocation
+{
+    if(_lat == nil && _long == nil && [newLocation horizontalAccuracy] < 100)
+    {
+        [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+        _lat = [NSString stringWithFormat:@"%f", manager.location.coordinate.latitude];
+        _long = [NSString stringWithFormat:@"%f", manager.location.coordinate.longitude];
+        [self connectServerWithLatitude:_lat andLongitude:_long];
+    }
+}
+- (void)locationManager:(CLLocationManager *)manager
+     didUpdateLocations:(NSArray<CLLocation *> *)locations
+{
+    if(_lat == nil && _long == nil && [locations.lastObject horizontalAccuracy] < 100)
+    {
+        [MBProgressHUD showHUDAddedTo:self.view animated:YES];
+        _lat = [NSString stringWithFormat:@"%f", manager.location.coordinate.latitude];
+        _long = [NSString stringWithFormat:@"%f", manager.location.coordinate.longitude];
+        [self connectServerWithLatitude:_lat andLongitude:_long];
+    }
+}
+
 - (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error
 {
     NSLog(@"...");
@@ -65,7 +91,7 @@
 //        [[[UIAlertView new] initWithTitle:nil message:@"Please enable location services." delegate:nil cancelButtonTitle:nil otherButtonTitles:@"Ok", nil] show];
         NSLog(@"Location services not enabled");
     }
-    else
+    else if(_lat == nil && _long == nil)
     {
         MBProgressHUD *hud = [MBProgressHUD showHUDAddedTo:self.view animated:YES];
         hud.mode = MBProgressHUDModeAnnularDeterminate;
@@ -76,10 +102,11 @@
     }
 }
 
+
 #pragma mark SearchBar Delegates
 - (void)searchBarTextDidBeginEditing:(UISearchBar *)searchBar
 {
-    
+    searchBar.text = @"";
 }
 
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText
@@ -174,6 +201,7 @@
          }
          else
          {
+             _locations.hidden = NO;
              [_locations reloadData];
              dispatch_async(dispatch_get_global_queue( DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
                  // Do something...
@@ -233,6 +261,8 @@
         return [UILabel new];
     UILabel* lb = [UILabel new];
     lb.textColor = [UIColor blueColor];
+    lb.font = [UIFont boldSystemFontOfSize:17.0f];
+    lb.backgroundColor = [UIColor colorWithRed:158.0f/255.0f green:163.0f/255.0f blue:170.0f/255.0f alpha:0.7];
     lb.text = section == 0 ? @" Now" : @" 5 Days Forecast";
     return lb;
 }
@@ -304,10 +334,6 @@
             [dateFormatter setTimeZone:timeZone];
             NSLog(@"JS Date CURRENT: %@", [[NSDate new] descriptionWithLocale:[NSLocale currentLocale]]);
 
-            
-            
-//        date: temp, humidty Description
-            
             NSString* desc          = [NSString stringWithFormat:@"On %@ - %@\n",
                                        [dateFormatter stringFromDate:dt],
                                        [[[[[[_object5DaysForecast valueForKey:@"list"] objectAtIndex:indexPath.row] valueForKey:@"weather"] firstObject] valueForKey:@"description"] uppercaseString]];
@@ -389,50 +415,43 @@
                                        queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *response, NSData *data, NSError *error)
      {
          _arrayOfPlacesSearched = nil;
-//         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{ // 1
-//             dispatch_async(dispatch_get_main_queue(), ^{ // 2
-         
-                 if ([data length] > 0 && error == nil)
-                 {
-                     NSError* err = nil;
-                     _searchPlaceDict = [NSJSONSerialization JSONObjectWithData:data options: NSJSONReadingMutableContainers error: &err];
-                     _arrayOfPlacesSearched = [[_searchPlaceDict valueForKey:@"predictions"] valueForKey:@"description"];
-                     
-                     if (_arrayOfPlacesSearched.count > 0) {
-                         _locations.hidden = NO;
-                         [_locations performSelectorOnMainThread:@selector(reloadData) withObject:nil waitUntilDone:YES];
-                         [_locations scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0] atScrollPosition:UITableViewScrollPositionTop animated:YES];
-                     }
-                     else
-                     {
-                         [_locations performSelectorOnMainThread:@selector(reloadData) withObject:nil waitUntilDone:YES];
-                         _locations.hidden = YES;
-                     }
-                 }
-                 else if (([data length] == 0 && error == nil) ||
-                          (error != nil && error.code > 0) ||
-                          (error != nil))
-                 {
-                     _locations.hidden = YES;
-                     [_locations reloadData];
-                 }
-//             });
-//         });
-         
+         if ([data length] > 0 && error == nil)
+         {
+             NSError* err = nil;
+             _searchPlaceDict = [NSJSONSerialization JSONObjectWithData:data options: NSJSONReadingMutableContainers error: &err];
+             _arrayOfPlacesSearched = [[_searchPlaceDict valueForKey:@"predictions"] valueForKey:@"description"];
+             
+             if (_arrayOfPlacesSearched.count > 0) {
+                 _locations.hidden = NO;
+                 [_locations performSelectorOnMainThread:@selector(reloadData) withObject:nil waitUntilDone:YES];
+                 [_locations scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0] atScrollPosition:UITableViewScrollPositionTop animated:YES];
+             }
+             else
+             {
+                 [_locations performSelectorOnMainThread:@selector(reloadData) withObject:nil waitUntilDone:YES];
+                 _locations.hidden = YES;
+             }
+         }
+         else if (([data length] == 0 && error == nil) ||
+                  (error != nil && error.code > 0) ||
+                  (error != nil))
+         {
+             _locations.hidden = YES;
+             [_locations reloadData];
+         }
      }];
 }
 
 #pragma mark Coachmarks
 - (void)showHelp
 {
-    [[NSUserDefaults standardUserDefaults] setObject:@"1" forKey:@"Help"];
     // Setup coach marks
     CGRect coachmark1 = CGRectMake(5, 150, [[UIScreen mainScreen] bounds].size.width - 10, 0);
     // Setup coach marks
     NSArray *coachMarks = @[
                             @{
                                 @"rect": [NSValue valueWithCGRect:coachmark1],
-                                @"caption": @"Application will try to fetch your location to fetch weather details on launch or when bring to foreground",
+                                @"caption": @"Application will try to get your location to fetch weather details on launch",
                                 @"position":[NSNumber numberWithInteger:LABEL_POSITION_BOTTOM]
                                 },
                             @{
@@ -442,9 +461,9 @@
                                 @"showArrow":[NSNumber numberWithBool:YES]
                                 }
                             ];
-    
+
     MPCoachMarks *coachMarksVi = [[MPCoachMarks alloc] initWithFrame:self.view.bounds coachMarks:coachMarks];
-    coachMarksVi.maskColor = [UIColor colorWithRed:0.0f green:0.0f blue:0.0f alpha:0.5f];
+    coachMarksVi.maskColor = [UIColor colorWithRed:0.0f green:0.0f blue:0.0f alpha:0.6f];
     [self.view addSubview:coachMarksVi];
     coachMarksVi.delegate = self;
     coachMarksVi.animationDuration = 0.5f;
@@ -458,6 +477,11 @@
 {
     if(index == 1)
         [self enableLocationServices];
+}
+
+- (void)coachMarksViewDidCleanup:(MPCoachMarks *)coachMarksView
+{
+    [[NSUserDefaults standardUserDefaults] setObject:@"1" forKey:@"Help"];
 }
 
 @end

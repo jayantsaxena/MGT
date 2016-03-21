@@ -11,7 +11,7 @@
 
 @interface ViewController : UIViewController
 {
-    CLLocationManager           *_locationManager;
+    CLLocationManager*          _locationManager;
     NSString*                   _lat;
     NSString*                   _long;
 
@@ -30,7 +30,7 @@
     NSString*                   _searchedPlace;
     
     id                          _object;
-    id                          _object5DaysForecast;    
+    id                          _object5DaysForecast;
 }
 
 @end
