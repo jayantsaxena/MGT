@@ -30,8 +30,7 @@
     NSString*                   _searchedPlace;
     
     id                          _object;
-    id                          _object5DaysForecast;
-    
+    id                          _object5DaysForecast;    
 }
 
 @end
