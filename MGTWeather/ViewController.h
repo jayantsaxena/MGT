@@ -12,6 +12,10 @@
 @interface ViewController : UIViewController
 {
     CLLocationManager           *_locationManager;
+
+    IBOutlet UISearchBar*       _searchBar;
+    IBOutlet UITableView*       _locations;
+    IBOutlet UILabel*           _hint;
 }
 
 @end
